@@ -1,8 +1,19 @@
-const STORAGE_KEY = "projectHub.projects";
-const ACTIVITY_KEY = "projectHub.activity";
-const THEME_KEY = "projectHub.theme";
+const firebaseConfig = {
+  apiKey: "AIzaSyAHPpogPeP6KPo1JTmt9oO3oYjrG60G79M",
+  authDomain: "web-collaction.firebaseapp.com",
+  projectId: "web-collaction",
+  storageBucket: "web-collaction.firebasestorage.app",
+  messagingSenderId: "184895049860",
+  appId: "1:184895049860:web:b5d986fa05f4437d26b2d1",
+  measurementId: "G-NESVJRDWBG"
+};
 
-const categories = [
+const SESSION_KEY = "projectHub.firebaseSession";
+const THEME_KEY = "projectHub.theme";
+const authBase = "https://identitytoolkit.googleapis.com/v1/accounts";
+const firestoreBase = `https://firestore.googleapis.com/v1/projects/${firebaseConfig.projectId}/databases/(default)/documents`;
+
+const defaultCategories = [
   "Web Development",
   "Python",
   "AI",
@@ -12,51 +23,39 @@ const categories = [
   "Personal Projects"
 ];
 
-const sampleProjects = [
-  {
-    id: crypto.randomUUID(),
-    name: "Portfolio Website",
-    description: "Personal portfolio with case studies, contact links, and live project previews.",
-    category: "Web Development",
-    technologies: ["HTML", "CSS", "JavaScript"],
-    liveUrl: "https://example.com",
-    githubUrl: "https://github.com/example/portfolio",
-    thumbnail: "",
-    dateAdded: new Date().toISOString(),
-    favorite: true,
-    pinned: true
-  },
-  {
-    id: crypto.randomUUID(),
-    name: "AI Notes Organizer",
-    description: "A lightweight idea tracker for prompts, notes, and useful AI experiments.",
-    category: "AI",
-    technologies: ["JavaScript", "LocalStorage"],
-    liveUrl: "",
-    githubUrl: "https://github.com/example/ai-notes",
-    thumbnail: "",
-    dateAdded: new Date(Date.now() - 86400000).toISOString(),
-    favorite: false,
-    pinned: false
-  }
-];
-
-let projects = loadProjects();
-let activity = loadActivity();
+let currentUser = null;
+let projects = [];
+let activity = [];
 
 const els = {
-  projectGrid: document.getElementById("projectGrid"),
-  emptyState: document.getElementById("emptyState"),
-  searchInput: document.getElementById("searchInput"),
-  categoryFilter: document.getElementById("categoryFilter"),
-  techFilter: document.getElementById("techFilter"),
-  sortSelect: document.getElementById("sortSelect"),
+  authScreen: document.getElementById("authScreen"),
+  app: document.getElementById("app"),
+  loginTab: document.getElementById("loginTab"),
+  registerTab: document.getElementById("registerTab"),
+  loginForm: document.getElementById("loginForm"),
+  registerForm: document.getElementById("registerForm"),
+  loginIdentity: document.getElementById("loginIdentity"),
+  loginPassword: document.getElementById("loginPassword"),
+  registerName: document.getElementById("registerName"),
+  registerEmail: document.getElementById("registerEmail"),
+  registerPassword: document.getElementById("registerPassword"),
+  userName: document.getElementById("userName"),
+  logoutBtn: document.getElementById("logoutBtn"),
+  themeBtn: document.getElementById("themeBtn"),
+  menuBtn: document.getElementById("menuBtn"),
+  sidebar: document.getElementById("sidebar"),
   totalProjects: document.getElementById("totalProjects"),
   totalCategories: document.getElementById("totalCategories"),
   mostUsedTech: document.getElementById("mostUsedTech"),
   recentProjects: document.getElementById("recentProjects"),
+  searchInput: document.getElementById("searchInput"),
+  categoryFilter: document.getElementById("categoryFilter"),
+  techFilter: document.getElementById("techFilter"),
+  sortSelect: document.getElementById("sortSelect"),
+  projectGrid: document.getElementById("projectGrid"),
+  emptyState: document.getElementById("emptyState"),
   activityList: document.getElementById("activityList"),
-  form: document.getElementById("projectForm"),
+  projectForm: document.getElementById("projectForm"),
   projectId: document.getElementById("projectId"),
   projectName: document.getElementById("projectName"),
   projectDescription: document.getElementById("projectDescription"),
@@ -65,93 +64,142 @@ const els = {
   projectLiveUrl: document.getElementById("projectLiveUrl"),
   projectGithubUrl: document.getElementById("projectGithubUrl"),
   projectThumbnail: document.getElementById("projectThumbnail"),
+  formTitle: document.getElementById("formTitle"),
   saveProjectBtn: document.getElementById("saveProjectBtn"),
   cancelEditBtn: document.getElementById("cancelEditBtn"),
-  formTitle: document.getElementById("formTitle"),
-  formModeLabel: document.getElementById("formModeLabel"),
-  themeToggle: document.getElementById("themeToggle"),
-  backupBtn: document.getElementById("backupBtn"),
+  newProjectBtn: document.getElementById("newProjectBtn"),
   exportBtn: document.getElementById("exportBtn"),
   importInput: document.getElementById("importInput"),
-  clearActivityBtn: document.getElementById("clearActivityBtn"),
-  addProjectShortcut: document.getElementById("addProjectShortcut"),
-  mobileMenuBtn: document.getElementById("mobileMenuBtn"),
-  sidebar: document.querySelector(".sidebar"),
   toast: document.getElementById("toast")
 };
 
-init();
+start();
 
-function init() {
+async function start() {
   applyTheme();
-  populateCategoryOptions();
   bindEvents();
-  render();
-}
 
-function loadProjects() {
-  const stored = localStorage.getItem(STORAGE_KEY);
-  if (!stored) {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(sampleProjects));
-    return sampleProjects;
+  const saved = readSession();
+  if (saved?.idToken) {
+    currentUser = saved;
+    await enterApp();
   }
-
-  try {
-    return JSON.parse(stored);
-  } catch {
-    return [];
-  }
-}
-
-function loadActivity() {
-  try {
-    return JSON.parse(localStorage.getItem(ACTIVITY_KEY)) || [];
-  } catch {
-    return [];
-  }
-}
-
-function saveProjects() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(projects));
-}
-
-function saveActivity() {
-  localStorage.setItem(ACTIVITY_KEY, JSON.stringify(activity.slice(0, 30)));
 }
 
 function bindEvents() {
-  els.form.addEventListener("submit", handleSubmit);
+  els.loginTab.addEventListener("click", () => switchAuth("login"));
+  els.registerTab.addEventListener("click", () => switchAuth("register"));
+  els.loginForm.addEventListener("submit", login);
+  els.registerForm.addEventListener("submit", register);
+  els.logoutBtn.addEventListener("click", logout);
+  els.themeBtn.addEventListener("click", toggleTheme);
+  els.menuBtn.addEventListener("click", () => els.sidebar.classList.toggle("open"));
   els.searchInput.addEventListener("input", renderProjects);
   els.categoryFilter.addEventListener("change", renderProjects);
   els.techFilter.addEventListener("change", renderProjects);
   els.sortSelect.addEventListener("change", renderProjects);
+  els.projectForm.addEventListener("submit", saveProject);
   els.cancelEditBtn.addEventListener("click", resetForm);
-  els.themeToggle.addEventListener("click", toggleTheme);
-  els.backupBtn.addEventListener("click", exportProjects);
+  els.newProjectBtn.addEventListener("click", focusProjectForm);
   els.exportBtn.addEventListener("click", exportProjects);
   els.importInput.addEventListener("change", importProjects);
-  els.clearActivityBtn.addEventListener("click", clearActivity);
-  els.addProjectShortcut.addEventListener("click", () => focusForm());
-  els.mobileMenuBtn.addEventListener("click", () => els.sidebar.classList.toggle("open"));
 
-  document.querySelectorAll(".nav-link").forEach((link) => {
-    link.addEventListener("click", () => {
-      document.querySelectorAll(".nav-link").forEach((item) => item.classList.remove("active"));
-      link.classList.add("active");
-      els.sidebar.classList.remove("open");
-    });
+  document.addEventListener("keydown", (event) => {
+    const typing = ["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement.tagName);
+    if (event.key === "/" && !typing) {
+      event.preventDefault();
+      els.searchInput.focus();
+    }
+    if (event.key.toLowerCase() === "n" && !typing) focusProjectForm();
+    if (event.key.toLowerCase() === "t" && !typing) toggleTheme();
   });
-
-  document.addEventListener("keydown", handleShortcuts);
 }
 
-function populateCategoryOptions() {
-  categories.forEach((category) => {
-    const option = document.createElement("option");
-    option.value = category;
-    option.textContent = category;
-    els.categoryFilter.append(option);
-  });
+function switchAuth(mode) {
+  const loginMode = mode === "login";
+  els.loginTab.classList.toggle("active", loginMode);
+  els.registerTab.classList.toggle("active", !loginMode);
+  els.loginForm.classList.toggle("hidden", !loginMode);
+  els.registerForm.classList.toggle("hidden", loginMode);
+}
+
+async function register(event) {
+  event.preventDefault();
+  try {
+    const name = els.registerName.value.trim();
+    const response = await authRequest("signUp", {
+      email: els.registerEmail.value.trim(),
+      password: els.registerPassword.value,
+      returnSecureToken: true
+    });
+
+    currentUser = {
+      uid: response.localId,
+      email: response.email,
+      name,
+      idToken: response.idToken,
+      refreshToken: response.refreshToken
+    };
+    saveSession();
+
+    await setFirestoreDoc("users", currentUser.uid, { name, email: currentUser.email, createdAt: new Date().toISOString() });
+    els.registerForm.reset();
+    showToast("Account created");
+    await enterApp();
+  } catch (error) {
+    showToast(readableAuthError(error.message));
+  }
+}
+
+async function login(event) {
+  event.preventDefault();
+  try {
+    const response = await authRequest("signInWithPassword", {
+      email: els.loginIdentity.value.trim(),
+      password: els.loginPassword.value,
+      returnSecureToken: true
+    });
+
+    currentUser = {
+      uid: response.localId,
+      email: response.email,
+      name: response.displayName || response.email.split("@")[0],
+      idToken: response.idToken,
+      refreshToken: response.refreshToken
+    };
+    saveSession();
+    els.loginForm.reset();
+    await enterApp();
+  } catch (error) {
+    showToast(readableAuthError(error.message));
+  }
+}
+
+async function enterApp() {
+  els.userName.textContent = currentUser.name || currentUser.email;
+  els.authScreen.classList.add("hidden");
+  els.app.classList.remove("hidden");
+  await loadUserData();
+  render();
+}
+
+function logout() {
+  currentUser = null;
+  projects = [];
+  activity = [];
+  localStorage.removeItem(SESSION_KEY);
+  els.app.classList.add("hidden");
+  els.authScreen.classList.remove("hidden");
+  switchAuth("login");
+  render();
+  showToast("Logged out");
+}
+
+async function loadUserData() {
+  projects = await queryCollection("projects");
+  activity = await queryCollection("activity");
+  projects.sort((a, b) => new Date(b.dateAdded) - new Date(a.dateAdded));
+  activity.sort((a, b) => new Date(b.time) - new Date(a.time));
 }
 
 function render() {
@@ -164,168 +212,134 @@ function render() {
 function renderFilters() {
   const selectedCategory = els.categoryFilter.value;
   const selectedTech = els.techFilter.value;
-  const projectCategories = [...new Set(projects.map((project) => project.category).filter(Boolean))];
-  const allCategories = [...new Set([...categories, ...projectCategories])].sort();
-  const allTech = [...new Set(projects.flatMap((project) => project.technologies || []))]
-    .filter(Boolean)
-    .sort((a, b) => a.localeCompare(b));
+  const categories = [...new Set([...defaultCategories, ...projects.map((project) => project.category)])].filter(Boolean).sort();
+  const techs = [...new Set(projects.flatMap((project) => project.technologies || []))].filter(Boolean).sort();
 
-  els.categoryFilter.innerHTML = '<option value="">All Categories</option>';
-  allCategories.forEach((category) => {
-    const option = document.createElement("option");
-    option.value = category;
-    option.textContent = category;
-    els.categoryFilter.append(option);
-  });
+  els.categoryFilter.innerHTML = '<option value="">All categories</option>';
+  categories.forEach((category) => els.categoryFilter.append(new Option(category, category)));
   els.categoryFilter.value = selectedCategory;
 
-  els.techFilter.innerHTML = '<option value="">All Technologies</option>';
-  allTech.forEach((tech) => {
-    const option = document.createElement("option");
-    option.value = tech;
-    option.textContent = tech;
-    els.techFilter.append(option);
-  });
+  els.techFilter.innerHTML = '<option value="">All technologies</option>';
+  techs.forEach((tech) => els.techFilter.append(new Option(tech, tech)));
   els.techFilter.value = selectedTech;
 }
 
 function renderStats() {
-  const usedCategories = new Set(projects.map((project) => project.category).filter(Boolean));
-  const techCounts = countItems(projects.flatMap((project) => project.technologies || []));
-  const mostUsed = Object.entries(techCounts).sort((a, b) => b[1] - a[1])[0];
+  const categoryCount = new Set(projects.map((project) => project.category).filter(Boolean)).size;
+  const techCounts = projects.flatMap((project) => project.technologies || []).reduce((acc, tech) => {
+    acc[tech] = (acc[tech] || 0) + 1;
+    return acc;
+  }, {});
+  const topTech = Object.entries(techCounts).sort((a, b) => b[1] - a[1])[0];
   const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
-  const recentCount = projects.filter((project) => new Date(project.dateAdded).getTime() >= sevenDaysAgo).length;
 
   els.totalProjects.textContent = projects.length;
-  els.totalCategories.textContent = usedCategories.size;
-  els.mostUsedTech.textContent = mostUsed ? mostUsed[0] : "None";
-  els.recentProjects.textContent = recentCount;
+  els.totalCategories.textContent = categoryCount;
+  els.mostUsedTech.textContent = topTech ? topTech[0] : "None";
+  els.recentProjects.textContent = projects.filter((project) => new Date(project.dateAdded).getTime() >= sevenDaysAgo).length;
 }
 
 function renderProjects() {
-  const query = els.searchInput.value.trim().toLowerCase();
+  const queryText = els.searchInput.value.trim().toLowerCase();
   const category = els.categoryFilter.value;
   const tech = els.techFilter.value;
-  const sortBy = els.sortSelect.value;
+  const sort = els.sortSelect.value;
 
-  const filtered = projects
-    .filter((project) => project.name.toLowerCase().includes(query))
+  const visible = projects
+    .filter((project) => project.name.toLowerCase().includes(queryText))
     .filter((project) => !category || project.category === category)
     .filter((project) => !tech || (project.technologies || []).includes(tech))
     .sort((a, b) => {
       if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
-      if (sortBy === "oldest") return new Date(a.dateAdded) - new Date(b.dateAdded);
-      if (sortBy === "az") return a.name.localeCompare(b.name);
+      if (sort === "oldest") return new Date(a.dateAdded) - new Date(b.dateAdded);
+      if (sort === "az") return a.name.localeCompare(b.name);
       return new Date(b.dateAdded) - new Date(a.dateAdded);
     });
 
   els.projectGrid.innerHTML = "";
-  els.emptyState.classList.toggle("show", filtered.length === 0);
-
-  filtered.forEach((project) => {
-    els.projectGrid.append(createProjectCard(project));
-  });
+  els.emptyState.classList.toggle("hidden", visible.length > 0);
+  visible.forEach((project) => els.projectGrid.append(createProjectCard(project)));
 }
 
 function createProjectCard(project) {
+  const initials = project.name.split(" ").map((word) => word[0]).join("").slice(0, 2).toUpperCase();
   const card = document.createElement("article");
   card.className = "project-card";
-  const initials = project.name
-    .split(" ")
-    .map((word) => word[0])
-    .join("")
-    .slice(0, 2)
-    .toUpperCase();
-
   card.innerHTML = `
-    <div class="thumbnail">
-      ${project.thumbnail ? `<img src="${escapeAttr(project.thumbnail)}" alt="${escapeAttr(project.name)} thumbnail">` : `<span>${escapeHtml(initials)}</span>`}
-    </div>
+    <div class="thumb">${project.thumbnail ? `<img src="${escapeHtml(project.thumbnail)}" alt="${escapeHtml(project.name)} thumbnail">` : escapeHtml(initials)}</div>
     <div class="card-body">
-      <div class="project-title-row">
+      <div class="card-top">
         <h3>${escapeHtml(project.name)}</h3>
-        <div class="project-actions">
-          <button class="icon-action ${project.favorite ? "active" : ""}" data-action="favorite" title="Favorite">★</button>
-          <button class="icon-action ${project.pinned ? "active" : ""}" data-action="pin" title="Pin">⌃</button>
+        <div>
+          <button class="icon-btn ${project.favorite ? "active" : ""}" data-action="favorite" title="Favorite">★</button>
+          <button class="icon-btn ${project.pinned ? "active" : ""}" data-action="pin" title="Pin">⌃</button>
         </div>
       </div>
-      <p class="project-description">${escapeHtml(project.description)}</p>
-      <div class="card-tags">
+      <p>${escapeHtml(project.description)}</p>
+      <div class="tags">
         <span class="tag">${escapeHtml(project.category)}</span>
         ${(project.technologies || []).map((item) => `<span class="tag">${escapeHtml(item)}</span>`).join("")}
       </div>
-      <div class="url-actions">
-        <button class="small-button" data-action="live">Live Site</button>
-        <button class="small-button" data-action="github">GitHub</button>
-        <button class="small-button" data-action="copy">Copy URL</button>
-      </div>
-      <div class="card-footer">
-        <span>${formatDate(project.dateAdded)}</span>
-        <div class="project-actions">
-          <button class="text-button" data-action="edit">Edit</button>
-          <button class="danger-button" data-action="delete">Delete</button>
-        </div>
+      <span class="meta">Added ${formatDate(project.dateAdded)}</span>
+      <div class="card-actions">
+        <button class="small-btn" data-action="live">Live Site</button>
+        <button class="small-btn" data-action="github">GitHub</button>
+        <button class="small-btn" data-action="copy">Copy URL</button>
+        <button class="small-btn" data-action="edit">Edit</button>
+        <button class="danger-btn" data-action="delete">Delete</button>
       </div>
     </div>
   `;
-
   card.addEventListener("click", (event) => {
     const action = event.target.dataset.action;
-    if (!action) return;
-    handleProjectAction(action, project.id);
+    if (action) projectAction(action, project.id);
   });
-
   return card;
 }
 
-function handleProjectAction(action, id) {
+async function projectAction(action, id) {
   const project = projects.find((item) => item.id === id);
   if (!project) return;
 
-  if (action === "live") return openUrl(project.liveUrl, "Live URL is empty");
-  if (action === "github") return openUrl(project.githubUrl, "GitHub URL is empty");
-  if (action === "copy") return copyProjectUrl(project);
+  if (action === "live") return openUrl(project.liveUrl, "Live URL empty hai");
+  if (action === "github") return openUrl(project.githubUrl, "GitHub URL empty hai");
+  if (action === "copy") return copyUrl(project.liveUrl || project.githubUrl);
   if (action === "edit") return editProject(project);
   if (action === "delete") return deleteProject(project);
 
-  if (action === "favorite" || action === "pin") {
-    project[action === "favorite" ? "favorite" : "pinned"] = !project[action === "favorite" ? "favorite" : "pinned"];
-    saveProjects();
-    addActivity(`${action === "favorite" ? "Updated favorite" : "Updated pin"}: ${project.name}`);
-    render();
-  }
+  if (action === "favorite") project.favorite = !project.favorite;
+  if (action === "pin") project.pinned = !project.pinned;
+  await setFirestoreDoc("projects", project.id, project);
+  await addActivity(`${action === "favorite" ? "Favorite updated" : "Pin updated"}: ${project.name}`);
+  await loadUserData();
+  render();
 }
 
-function handleSubmit(event) {
+async function saveProject(event) {
   event.preventDefault();
-
-  const formProject = {
-    id: els.projectId.value || crypto.randomUUID(),
+  const existing = projects.find((project) => project.id === els.projectId.value);
+  const project = {
+    id: existing?.id || crypto.randomUUID(),
+    userId: currentUser.uid,
     name: els.projectName.value.trim(),
     description: els.projectDescription.value.trim(),
     category: els.projectCategory.value,
-    technologies: parseTechnologies(els.projectTech.value),
+    technologies: parseTech(els.projectTech.value),
     liveUrl: els.projectLiveUrl.value.trim(),
     githubUrl: els.projectGithubUrl.value.trim(),
     thumbnail: els.projectThumbnail.value.trim(),
-    dateAdded: els.projectId.value ? projects.find((project) => project.id === els.projectId.value)?.dateAdded : new Date().toISOString(),
-    favorite: els.projectId.value ? projects.find((project) => project.id === els.projectId.value)?.favorite || false : false,
-    pinned: els.projectId.value ? projects.find((project) => project.id === els.projectId.value)?.pinned || false : false
+    dateAdded: existing?.dateAdded || new Date().toISOString(),
+    favorite: existing?.favorite || false,
+    pinned: existing?.pinned || false,
+    updatedAt: new Date().toISOString()
   };
 
-  if (els.projectId.value) {
-    projects = projects.map((project) => project.id === formProject.id ? formProject : project);
-    addActivity(`Edited project: ${formProject.name}`);
-    showToast("Project updated");
-  } else {
-    projects.unshift(formProject);
-    addActivity(`Added project: ${formProject.name}`);
-    showToast("Project saved");
-  }
-
-  saveProjects();
+  await setFirestoreDoc("projects", project.id, project);
+  await addActivity(`${existing ? "Edited" : "Added"} project: ${project.name}`);
+  await loadUserData();
   resetForm();
   render();
+  showToast(existing ? "Project updated" : "Project saved");
 }
 
 function editProject(project) {
@@ -337,41 +351,35 @@ function editProject(project) {
   els.projectLiveUrl.value = project.liveUrl;
   els.projectGithubUrl.value = project.githubUrl;
   els.projectThumbnail.value = project.thumbnail;
-  els.saveProjectBtn.textContent = "Update Project";
   els.formTitle.textContent = "Edit Project";
-  els.formModeLabel.textContent = "Update";
+  els.saveProjectBtn.textContent = "Update Project";
   els.cancelEditBtn.classList.remove("hidden");
-  focusForm();
+  focusProjectForm();
 }
 
-function deleteProject(project) {
-  const confirmed = confirm(`Delete "${project.name}" from Project Hub?`);
-  if (!confirmed) return;
-
-  projects = projects.filter((item) => item.id !== project.id);
-  saveProjects();
-  addActivity(`Deleted project: ${project.name}`);
+async function deleteProject(project) {
+  if (!confirm(`Delete "${project.name}"?`)) return;
+  await deleteFirestoreDoc("projects", project.id);
+  await addActivity(`Deleted project: ${project.name}`);
+  await loadUserData();
   render();
   showToast("Project deleted");
 }
 
 function resetForm() {
-  els.form.reset();
+  els.projectForm.reset();
   els.projectId.value = "";
-  els.saveProjectBtn.textContent = "Save Project";
   els.formTitle.textContent = "Add Project";
-  els.formModeLabel.textContent = "Create";
+  els.saveProjectBtn.textContent = "Save Project";
   els.cancelEditBtn.classList.add("hidden");
 }
 
 function renderActivity() {
   els.activityList.innerHTML = "";
-
   if (!activity.length) {
-    els.activityList.innerHTML = '<div class="activity-item"><strong>No recent activity</strong><span>Your updates will appear here.</span></div>';
+    els.activityList.innerHTML = '<div class="activity-item"><strong>No activity yet</strong><span>Your changes will appear here.</span></div>';
     return;
   }
-
   activity.slice(0, 12).forEach((item) => {
     const node = document.createElement("div");
     node.className = "activity-item";
@@ -380,50 +388,44 @@ function renderActivity() {
   });
 }
 
-function addActivity(message) {
-  activity.unshift({ message, time: new Date().toISOString() });
-  saveActivity();
-}
-
-function clearActivity() {
-  activity = [];
-  saveActivity();
-  renderActivity();
-  showToast("Activity cleared");
+async function addActivity(message) {
+  await setFirestoreDoc("activity", crypto.randomUUID(), {
+    userId: currentUser.uid,
+    message,
+    time: new Date().toISOString()
+  });
 }
 
 function exportProjects() {
-  const payload = JSON.stringify({ exportedAt: new Date().toISOString(), projects }, null, 2);
-  const blob = new Blob([payload], { type: "application/json" });
+  const blob = new Blob([JSON.stringify({ user: currentUser.email, exportedAt: new Date().toISOString(), projects }, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = `project-hub-backup-${new Date().toISOString().slice(0, 10)}.json`;
+  link.download = `project-hub-${new Date().toISOString().slice(0, 10)}.json`;
   link.click();
   URL.revokeObjectURL(url);
-  addActivity("Downloaded JSON backup");
-  renderActivity();
   showToast("Backup downloaded");
 }
 
 function importProjects(event) {
   const file = event.target.files[0];
   if (!file) return;
-
   const reader = new FileReader();
-  reader.onload = () => {
+  reader.onload = async () => {
     try {
       const data = JSON.parse(reader.result);
       const imported = Array.isArray(data) ? data : data.projects;
-      if (!Array.isArray(imported)) throw new Error("Invalid project list");
-
-      projects = imported.map(normalizeProject);
-      saveProjects();
-      addActivity(`Imported ${projects.length} projects`);
+      if (!Array.isArray(imported)) throw new Error("Invalid file");
+      for (const item of imported) {
+        const project = normalizeImportedProject(item);
+        await setFirestoreDoc("projects", project.id, project);
+      }
+      await addActivity(`Imported ${imported.length} projects`);
+      await loadUserData();
       render();
       showToast("Projects imported");
     } catch {
-      showToast("Could not import this JSON file");
+      showToast("Invalid JSON file");
     } finally {
       event.target.value = "";
     }
@@ -431,115 +433,191 @@ function importProjects(event) {
   reader.readAsText(file);
 }
 
-function normalizeProject(project) {
+function normalizeImportedProject(project) {
   return {
-    id: project.id || crypto.randomUUID(),
+    id: crypto.randomUUID(),
+    userId: currentUser.uid,
     name: project.name || "Untitled Project",
     description: project.description || "",
     category: project.category || "Personal Projects",
-    technologies: Array.isArray(project.technologies) ? project.technologies : parseTechnologies(project.technologies || ""),
+    technologies: Array.isArray(project.technologies) ? project.technologies : parseTech(project.technologies || ""),
     liveUrl: project.liveUrl || "",
     githubUrl: project.githubUrl || "",
     thumbnail: project.thumbnail || "",
     dateAdded: project.dateAdded || new Date().toISOString(),
     favorite: Boolean(project.favorite),
-    pinned: Boolean(project.pinned)
+    pinned: Boolean(project.pinned),
+    updatedAt: new Date().toISOString()
   };
 }
 
-function openUrl(url, fallbackMessage) {
-  if (!url) {
-    showToast(fallbackMessage);
-    return;
+async function authRequest(endpoint, body) {
+  const response = await fetch(`${authBase}:${endpoint}?key=${firebaseConfig.apiKey}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body)
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error?.message || "AUTH_ERROR");
+  return data;
+}
+
+async function firestoreRequest(path, options = {}) {
+  const response = await fetch(`${firestoreBase}/${path}`, {
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${currentUser.idToken}`,
+      ...(options.headers || {})
+    }
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error?.message || "FIRESTORE_ERROR");
+  return data;
+}
+
+async function setFirestoreDoc(collectionName, id, value) {
+  const payload = { fields: toFirestoreFields(value) };
+  await firestoreRequest(`${collectionName}/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(payload)
+  });
+}
+
+async function deleteFirestoreDoc(collectionName, id) {
+  await firestoreRequest(`${collectionName}/${id}`, { method: "DELETE" });
+}
+
+async function queryCollection(collectionName) {
+  const structuredQuery = {
+    structuredQuery: {
+      from: [{ collectionId: collectionName }],
+      where: {
+        fieldFilter: {
+          field: { fieldPath: "userId" },
+          op: "EQUAL",
+          value: { stringValue: currentUser.uid }
+        }
+      }
+    }
+  };
+
+  const rows = await firestoreRequest(":runQuery", {
+    method: "POST",
+    body: JSON.stringify(structuredQuery)
+  });
+
+  return rows
+    .filter((row) => row.document)
+    .map((row) => {
+      const parts = row.document.name.split("/");
+      return {
+        id: parts[parts.length - 1],
+        ...fromFirestoreFields(row.document.fields || {})
+      };
+    });
+}
+
+function toFirestoreFields(value) {
+  return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, toFirestoreValue(item)]));
+}
+
+function toFirestoreValue(value) {
+  if (Array.isArray(value)) return { arrayValue: { values: value.map(toFirestoreValue) } };
+  if (typeof value === "boolean") return { booleanValue: value };
+  if (typeof value === "number") return { doubleValue: value };
+  return { stringValue: value == null ? "" : String(value) };
+}
+
+function fromFirestoreFields(fields) {
+  return Object.fromEntries(Object.entries(fields).map(([key, value]) => [key, fromFirestoreValue(value)]));
+}
+
+function fromFirestoreValue(value) {
+  if ("stringValue" in value) return value.stringValue;
+  if ("booleanValue" in value) return value.booleanValue;
+  if ("doubleValue" in value) return value.doubleValue;
+  if ("integerValue" in value) return Number(value.integerValue);
+  if ("arrayValue" in value) return (value.arrayValue.values || []).map(fromFirestoreValue);
+  return "";
+}
+
+function saveSession() {
+  localStorage.setItem(SESSION_KEY, JSON.stringify(currentUser));
+}
+
+function readSession() {
+  try {
+    return JSON.parse(localStorage.getItem(SESSION_KEY));
+  } catch {
+    return null;
   }
+}
+
+function openUrl(url, message) {
+  if (!url) return showToast(message);
   window.open(url, "_blank", "noopener,noreferrer");
 }
 
-async function copyProjectUrl(project) {
-  const url = project.liveUrl || project.githubUrl;
-  if (!url) {
-    showToast("No URL available to copy");
-    return;
-  }
-
+async function copyUrl(url) {
+  if (!url) return showToast("Copy karne ke liye URL nahi hai");
   if (navigator.clipboard && window.isSecureContext) {
     await navigator.clipboard.writeText(url);
   } else {
-    const textarea = document.createElement("textarea");
-    textarea.value = url;
-    textarea.style.position = "fixed";
-    textarea.style.opacity = "0";
-    document.body.append(textarea);
-    textarea.select();
+    const input = document.createElement("textarea");
+    input.value = url;
+    input.style.position = "fixed";
+    input.style.opacity = "0";
+    document.body.append(input);
+    input.select();
     document.execCommand("copy");
-    textarea.remove();
+    input.remove();
   }
-  addActivity(`Copied URL: ${project.name}`);
-  renderActivity();
   showToast("URL copied");
 }
 
+function focusProjectForm() {
+  document.getElementById("add").scrollIntoView({ behavior: "smooth" });
+  setTimeout(() => els.projectName.focus(), 300);
+}
+
 function toggleTheme() {
-  const nextTheme = document.body.classList.contains("dark") ? "light" : "dark";
-  localStorage.setItem(THEME_KEY, nextTheme);
+  const next = document.body.classList.contains("dark") ? "light" : "dark";
+  localStorage.setItem(THEME_KEY, next);
   applyTheme();
 }
 
 function applyTheme() {
   const saved = localStorage.getItem(THEME_KEY);
-  const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+  const prefersDark = matchMedia("(prefers-color-scheme: dark)").matches;
   document.body.classList.toggle("dark", saved ? saved === "dark" : prefersDark);
 }
 
-function handleShortcuts(event) {
-  const isTyping = ["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement.tagName);
-
-  if (event.key === "/" && !isTyping) {
-    event.preventDefault();
-    els.searchInput.focus();
-  }
-
-  if (event.key.toLowerCase() === "n" && !isTyping) {
-    focusForm();
-  }
-
-  if (event.key.toLowerCase() === "t" && !isTyping) {
-    toggleTheme();
-  }
-}
-
-function focusForm() {
-  document.getElementById("add-project").scrollIntoView({ behavior: "smooth", block: "start" });
-  setTimeout(() => els.projectName.focus(), 350);
-}
-
-function parseTechnologies(value) {
-  if (Array.isArray(value)) return value;
-  return value
-    .split(",")
-    .map((item) => item.trim())
-    .filter(Boolean);
-}
-
-function countItems(items) {
-  return items.reduce((acc, item) => {
-    acc[item] = (acc[item] || 0) + 1;
-    return acc;
-  }, {});
+function parseTech(value) {
+  return String(value).split(",").map((item) => item.trim()).filter(Boolean);
 }
 
 function formatDate(value, withTime = false) {
-  const options = withTime
-    ? { dateStyle: "medium", timeStyle: "short" }
-    : { year: "numeric", month: "short", day: "numeric" };
-  return new Intl.DateTimeFormat(undefined, options).format(new Date(value));
+  return new Intl.DateTimeFormat(undefined, withTime ? { dateStyle: "medium", timeStyle: "short" } : { dateStyle: "medium" }).format(new Date(value));
+}
+
+function readableAuthError(message) {
+  const messages = {
+    EMAIL_EXISTS: "This email already has an account",
+    INVALID_EMAIL: "Email address invalid hai",
+    WEAK_PASSWORD: "Password at least 6 characters ka rakho",
+    INVALID_LOGIN_CREDENTIALS: "Email ya password wrong hai",
+    EMAIL_NOT_FOUND: "Email ya password wrong hai",
+    INVALID_PASSWORD: "Email ya password wrong hai"
+  };
+  return messages[message] || message || "Something went wrong";
 }
 
 function showToast(message) {
   els.toast.textContent = message;
   els.toast.classList.add("show");
   clearTimeout(showToast.timer);
-  showToast.timer = setTimeout(() => els.toast.classList.remove("show"), 2200);
+  showToast.timer = setTimeout(() => els.toast.classList.remove("show"), 2600);
 }
 
 function escapeHtml(value) {
@@ -549,8 +627,4 @@ function escapeHtml(value) {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#039;");
-}
-
-function escapeAttr(value) {
-  return escapeHtml(value);
 }
