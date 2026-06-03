@@ -4,194 +4,97 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Project Hub</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <div class="app-shell">
-    <aside class="sidebar" aria-label="Project Hub navigation">
+  <section class="auth-screen" id="authScreen">
+    <div class="auth-card">
+      <div class="logo">PH</div>
+      <h1>Project Hub</h1>
+      <p>Login and keep your project links saved in Firebase Cloud Firestore.</p>
+
+      <div class="tabs">
+        <button class="tab active" id="loginTab">Login</button>
+        <button class="tab" id="registerTab">Register</button>
+      </div>
+
+      <form id="loginForm" class="auth-form">
+        <label>Email
+          <input id="loginIdentity" required autocomplete="username" placeholder="kuldeep@example.com">
+        </label>
+        <label>Password
+          <input id="loginPassword" type="password" required autocomplete="current-password" placeholder="Your password">
+        </label>
+        <button class="primary-btn" type="submit">Login</button>
+      </form>
+
+      <form id="registerForm" class="auth-form hidden">
+        <label>Name
+          <input id="registerName" required autocomplete="name" placeholder="Kuldeep">
+        </label>
+        <label>Email
+          <input id="registerEmail" type="email" required autocomplete="email" placeholder="kuldeep@example.com">
+        </label>
+        <label>Password
+          <input id="registerPassword" type="password" minlength="6" required autocomplete="new-password" placeholder="Minimum 6 characters">
+        </label>
+        <button class="primary-btn" type="submit">Create Account</button>
+      </form>
+    </div>
+  </section>
+
+  <div class="app hidden" id="app">
+    <aside class="sidebar" id="sidebar">
       <div class="brand">
-        <div class="brand-mark">PH</div>
+        <div class="logo">PH</div>
         <div>
           <strong>Project Hub</strong>
-          <span>Personal link dashboard</span>
+          <span id="userName">Dashboard</span>
         </div>
       </div>
-
-      <nav class="nav-list">
-        <a href="#dashboard" class="nav-link active" data-section="dashboard">
-          <span>Dashboard</span>
-        </a>
-        <a href="#add-project" class="nav-link" data-section="add-project">
-          <span>Add Project</span>
-        </a>
-        <a href="#activity" class="nav-link" data-section="activity">
-          <span>Activity</span>
-        </a>
-        <a href="#backup" class="nav-link" data-section="backup">
-          <span>Backup</span>
-        </a>
+      <nav>
+        <a href="#dashboard">Dashboard</a>
+        <a href="#projects">Projects</a>
+        <a href="#add">Add Project</a>
+        <a href="#backup">Backup</a>
       </nav>
-
-      <div class="sidebar-card">
-        <p>Keyboard</p>
-        <span><kbd>N</kbd> new project</span>
-        <span><kbd>/</kbd> search</span>
-        <span><kbd>T</kbd> theme</span>
-      </div>
+      <button class="danger-btn" id="logoutBtn">Logout</button>
     </aside>
 
-    <main class="main-content">
-      <header class="topbar">
-        <button class="icon-button mobile-menu" id="mobileMenuBtn" aria-label="Toggle menu">
-          <span></span><span></span><span></span>
-        </button>
+    <main class="main">
+      <header class="header">
+        <button class="menu-btn" id="menuBtn" aria-label="Open menu">☰</button>
         <div>
-          <p class="eyebrow">Fast access workspace</p>
+          <p class="eyebrow">Your private workspace</p>
           <h1>Project Hub</h1>
         </div>
-        <div class="top-actions">
-          <button class="ghost-button" id="backupBtn">Backup JSON</button>
-          <button class="theme-toggle" id="themeToggle" aria-label="Toggle dark and light mode">
-            <span class="toggle-thumb"></span>
-          </button>
-        </div>
+        <button class="ghost-btn" id="themeBtn">Toggle Theme</button>
       </header>
 
-      <section class="stats-grid" id="dashboard" aria-label="Project statistics">
-        <article class="stat-card">
-          <span>Total Projects</span>
-          <strong id="totalProjects">0</strong>
-        </article>
-        <article class="stat-card">
-          <span>Total Categories</span>
-          <strong id="totalCategories">0</strong>
-        </article>
-        <article class="stat-card">
-          <span>Most Used Tech</span>
-          <strong id="mostUsedTech">None</strong>
-        </article>
-        <article class="stat-card">
-          <span>Recently Added</span>
-          <strong id="recentProjects">0</strong>
-        </article>
+      <section class="stats" id="dashboard">
+        <article><span>Total Projects</span><strong id="totalProjects">0</strong></article>
+        <article><span>Total Categories</span><strong id="totalCategories">0</strong></article>
+        <article><span>Most Used Tech</span><strong id="mostUsedTech">None</strong></article>
+        <article><span>Recent Projects</span><strong id="recentProjects">0</strong></article>
       </section>
 
-      <section class="toolbar" aria-label="Search and filter projects">
-        <div class="search-box">
-          <span aria-hidden="true">⌕</span>
-          <input type="search" id="searchInput" placeholder="Search project name...">
-        </div>
-        <select id="categoryFilter" aria-label="Filter by category">
-          <option value="">All Categories</option>
-        </select>
-        <select id="techFilter" aria-label="Filter by technology">
-          <option value="">All Technologies</option>
-        </select>
-        <select id="sortSelect" aria-label="Sort projects">
-          <option value="newest">Newest</option>
-          <option value="oldest">Oldest</option>
-          <option value="az">A to Z</option>
+      <section class="tools">
+        <input id="searchInput" type="search" placeholder="Search project name...">
+        <select id="categoryFilter"><option value="">All categories</option></select>
+        <select id="techFilter"><option value="">All technologies</option></select>
+        <select id="sortSelect">
+          <option value="newest">Newest first</option>
+          <option value="oldest">Oldest first</option>
+          <option value="az">Alphabetical</option>
         </select>
       </section>
 
-      <section class="content-grid">
-        <div class="project-area">
-          <div class="section-heading">
-            <div>
-              <p class="eyebrow">Saved links</p>
-              <h2>All Projects</h2>
-            </div>
-            <button class="primary-button" id="addProjectShortcut">Add Project</button>
+      <section class="layout">
+        <div>
+          <div class="section-title" id="projects">
+            <h2>Saved Projects</h2>
+            <button class="primary-btn" id="newProjectBtn">Add Project</button>
           </div>
           <div class="project-grid" id="projectGrid"></div>
-          <div class="empty-state" id="emptyState">
-            <h3>No projects found</h3>
-            <p>Add your first project or adjust the filters.</p>
-          </div>
+          <div class="empty hidden" id="emptyState">No projects found. Add one or change filters.</div>
         </div>
-
-        <aside class="right-panel">
-          <section class="panel" id="activity">
-            <div class="section-heading compact">
-              <h2>Recent Activity</h2>
-              <button class="text-button" id="clearActivityBtn">Clear</button>
-            </div>
-            <div class="activity-list" id="activityList"></div>
-          </section>
-
-          <section class="panel" id="backup">
-            <h2>Import / Export</h2>
-            <p class="panel-copy">Move your Project Hub data between browsers with a JSON file.</p>
-            <div class="backup-actions">
-              <button class="ghost-button" id="exportBtn">Export JSON</button>
-              <label class="file-button">
-                Import JSON
-                <input type="file" id="importInput" accept="application/json">
-              </label>
-            </div>
-          </section>
-        </aside>
-      </section>
-
-      <section class="form-section" id="add-project">
-        <div class="section-heading">
-          <div>
-            <p class="eyebrow" id="formModeLabel">Create</p>
-            <h2 id="formTitle">Add Project</h2>
-          </div>
-          <button class="text-button hidden" id="cancelEditBtn">Cancel Edit</button>
-        </div>
-
-        <form class="project-form" id="projectForm">
-          <input type="hidden" id="projectId">
-          <label>
-            Project Name
-            <input type="text" id="projectName" required placeholder="Portfolio Website">
-          </label>
-          <label>
-            Category
-            <select id="projectCategory" required>
-              <option value="">Select Category</option>
-              <option>Web Development</option>
-              <option>Python</option>
-              <option>AI</option>
-              <option>Automation</option>
-              <option>Cyber Security</option>
-              <option>College Projects</option>
-              <option>Personal Projects</option>
-            </select>
-          </label>
-          <label class="wide">
-            Description
-            <textarea id="projectDescription" rows="4" required placeholder="Short note about what this project does"></textarea>
-          </label>
-          <label>
-            Technologies Used
-            <input type="text" id="projectTech" required placeholder="HTML, CSS, JavaScript">
-          </label>
-          <label>
-            Live URL
-            <input type="url" id="projectLiveUrl" placeholder="https://example.netlify.app">
-          </label>
-          <label>
-            GitHub Repository URL
-            <input type="url" id="projectGithubUrl" placeholder="https://github.com/user/repo">
-          </label>
-          <label>
-            Thumbnail URL
-            <input type="url" id="projectThumbnail" placeholder="https://images.unsplash.com/...">
-          </label>
-          <button class="primary-button wide" type="submit" id="saveProjectBtn">Save Project</button>
-        </form>
-      </section>
-    </main>
-  </div>
-
-  <div class="toast" id="toast" role="status" aria-live="polite"></div>
-
-  <script src="script.js"></script>
-</body>
-</html>
